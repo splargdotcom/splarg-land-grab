@@ -1,5 +1,14 @@
 # SPLARG LAND GRAB
 
+<!-- splarg-storefront:start -->
+<p align="center">
+  <strong><a href="https://splarg.itch.io/splarg-land-grab">▶ Play in browser on itch.io</a></strong>
+</p>
+<p align="center">
+  <a href="https://splarg.itch.io/splarg-land-grab">Screenshots & current public release</a> · <a href="https://splarg.com/">splarg.com</a>
+</p>
+<!-- splarg-storefront:end -->
+
 A fast browser territory-capture game by **Splarg**.
 
 Leave the safe edge, draw a path through unclaimed space and reconnect it to your territory to claim an area. Enemies moving through the void can hit you or cut an exposed trail, so every attempt to grab more land is a risk.
