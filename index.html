@@ -1,0 +1,1556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Splarg Land Grab</title>
+<style>
+  :root{
+    --bg:#000;
+    --green:#00ff66;
+    --green-soft:rgba(0,255,102,.2);
+    --green-dim:rgba(0,255,102,.08);
+  }
+  html,body{
+    margin:0;
+    height:100%;
+    background:#000;
+    color:var(--green);
+    font-family:Consolas,Monaco,"Courier New",monospace;
+  }
+  body{
+    display:grid;
+    place-items:center;
+    min-height:100vh;
+    padding:10px;
+    box-sizing:border-box;
+    overflow:auto;
+  }
+  .wrap{
+    --chrome-h: 136px;
+    width:min(94vw,820px);
+    max-width:820px;
+    display:grid;
+    gap:10px;
+    justify-items:center;
+  }
+  .hud{
+    border:1px solid rgba(0,255,102,.45);
+    padding:10px 12px;
+    box-shadow:0 0 0 1px rgba(0,255,102,.08) inset, 0 0 14px rgba(0,255,102,.12);
+    text-transform:uppercase;
+    letter-spacing:1px;
+    user-select:none;
+  }
+  .top{
+    display:grid;
+    grid-template-columns:minmax(220px,1fr) auto;
+    grid-template-areas:
+      'title actions'
+      'stats score';
+    gap:10px 16px;
+    align-items:center;
+    font-size:clamp(12px,1.35vw,17px);
+  }
+  .title{grid-area:title; font-weight:700; white-space:nowrap;}
+  .statsline,.scoreline{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    min-width:0;
+    white-space:nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .statsline{grid-area:stats;}
+  .scoreline{grid-area:score; gap:18px; justify-self:end;}
+  .num{
+    display:inline-block;
+    text-align:right;
+    font-variant-numeric: tabular-nums;
+  }
+  .num.xs{min-width:2ch;}
+  .num.short{min-width:4ch;}
+  .num.long{min-width:7ch;}
+  .bar{
+    margin-top:8px;
+    height:8px;
+    border:1px solid rgba(0,255,102,.45);
+    background:rgba(0,255,102,.04);
+    position:relative;
+    overflow:hidden;
+  }
+  .fill{
+    position:absolute;
+    inset:0 auto 0 0;
+    width:0%;
+    background:linear-gradient(90deg, rgba(0,255,102,.22), rgba(0,255,102,.92));
+    box-shadow:0 0 10px rgba(0,255,102,.55);
+  }
+  canvas{
+    width:min(94vw,820px,calc(100vh - var(--chrome-h)));
+    height:min(94vw,820px,calc(100vh - var(--chrome-h)));
+    image-rendering:pixelated;
+    border:2px solid rgba(0,255,102,.5);
+    background:#000;
+    box-shadow:0 0 0 1px rgba(0,255,102,.08) inset, 0 0 18px rgba(0,255,102,.16);
+    display:block;
+    justify-self:center;
+  }
+  .top-actions{
+    grid-area:actions;
+    display:flex;
+    gap:8px;
+    justify-self:end;
+    align-items:center;
+    white-space:nowrap;
+  }
+  .mini{
+    opacity:.85;
+    white-space:nowrap;
+  }
+  .btn{
+    appearance:none;
+    border:1px solid rgba(0,255,102,.52);
+    background:rgba(0,0,0,.82);
+    color:var(--green);
+    padding:4px 8px;
+    font:inherit;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    cursor:pointer;
+    box-shadow:0 0 0 1px rgba(0,255,102,.06) inset;
+  }
+  .btn:hover,.btn:focus-visible{
+    outline:none;
+    background:rgba(0,255,102,.10);
+    box-shadow:0 0 10px rgba(0,255,102,.12), 0 0 0 1px rgba(0,255,102,.10) inset;
+  }
+  .btn.active{
+    background:rgba(0,255,102,.16);
+    box-shadow:0 0 12px rgba(0,255,102,.16), 0 0 0 1px rgba(0,255,102,.14) inset;
+  }
+  .btn:disabled{
+    opacity:.45;
+    cursor:not-allowed;
+  }
+  .muted{opacity:.8;}
+  @media (max-width:700px){
+    .wrap{ --chrome-h: 176px; width:min(96vw,820px); }
+    .top{
+      grid-template-columns:1fr;
+      grid-template-areas:
+        'title'
+        'actions'
+        'stats'
+        'score';
+      gap:8px;
+    }
+    .statsline,.scoreline{flex-wrap:wrap; gap:8px 14px;}
+    .scoreline,.top-actions{justify-self:start; flex-wrap:wrap;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hud">
+    <div class="top">
+      <div class="title">SPLARG LAND GRAB</div>
+      <div class="statsline">
+        <span>Area <span id="areaText" class="num short">0%</span></span>
+        <span>Lives <span id="livesText" class="num xs">3</span></span>
+        <span>Level <span id="levelText" class="num xs">1</span></span>
+        <span>Time <span id="timeText" class="num short">0.0</span></span>
+      </div>
+      <div class="scoreline mini">
+        <span>Score <span id="scoreText" class="num long">0</span></span>
+        <span>High <span id="highScoreText" class="num long">0</span></span>
+      </div>
+      <div class="top-actions">
+        <button class="btn" id="pauseBtn" type="button">Pause [P]</button>
+        <button class="btn" id="muteBtn" type="button">Mute [M]</button>
+      </div>
+    </div>
+    <div class="bar"><div class="fill" id="barFill"></div></div>
+  </div>
+
+  <canvas id="game" width="640" height="640"></canvas>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const areaText = document.getElementById('areaText');
+  const livesText = document.getElementById('livesText');
+  const levelText = document.getElementById('levelText');
+  const timeText = document.getElementById('timeText');
+  const scoreText = document.getElementById('scoreText');
+  const highScoreText = document.getElementById('highScoreText');
+  const barFill = document.getElementById('barFill');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const muteBtn = document.getElementById('muteBtn');
+
+  const WIDTH = canvas.width;
+  const HEIGHT = canvas.height;
+  const GRID = 80;
+  const CELL = WIDTH / GRID;
+  const WIN_PERCENT = 75;
+
+  const VOID = 0;
+  const TERR = 1;
+  const PATH = 2;
+
+  const GREEN = '#00ff66';
+  const GREEN_SOFT = 'rgba(0,255,102,0.20)';
+  const GREEN_FAINT = 'rgba(0,255,102,0.06)';
+
+  let grid = [];
+  let terrainDirty = true;
+  let terrainCanvas = document.createElement('canvas');
+  terrainCanvas.width = WIDTH;
+  terrainCanvas.height = HEIGHT;
+  let tctx = terrainCanvas.getContext('2d');
+
+  let player;
+  let enemies = [];
+  let sparxes = [];
+  let particles = [];
+  let popups = [];
+  let currentPath = [];
+  let keys = new Set();
+  let dirOrder = [];
+  let score = 0;
+  let highScore = loadHighScore();
+  let lives = 3;
+  let level = 1;
+  let claimedPercent = 0;
+  let gameOver = false;
+  let gameState = 'title';
+  let flash = 0;
+  let shake = 0;
+  let lastTime = 0;
+  let stepAccumulator = 0;
+  let moveInterval = 0.018;
+  let safeInterval = 0.013;
+  const SNAP_CHAIN = 0.58;
+  let drawPulseCounter = 0;
+  let hitStop = 0;
+  let bannerTimer = 0;
+  let bannerText = '';
+  let bannerSub = '';
+  let scanPhase = 0;
+  let levelTime = 0;
+  let clearDelay = 0;
+  let lastRunScore = 0;
+  let titleNotice = '';
+
+
+  function loadHighScore() {
+    try {
+      const raw = localStorage.getItem('splarg_land_grabber_high_score');
+      const value = raw ? parseInt(raw, 10) : 0;
+      return Number.isFinite(value) ? Math.max(0, value) : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  function saveHighScore() {
+    if (score <= highScore) return;
+    highScore = score;
+    try {
+      localStorage.setItem('splarg_land_grabber_high_score', String(highScore));
+    } catch {}
+  }
+
+  function levelTimeBonus(seconds, lvl) {
+    const par = Math.max(12, 42 - lvl * 2);
+    const urgency = Math.max(0, 1 - seconds / par);
+    return Math.floor((250 + lvl * 120) * urgency);
+  }
+
+  const audio = {
+    ctx: null,
+    muted: false,
+    started: false,
+    master: null,
+    sfxBus: null,
+    musicBus: null,
+    musicTime: 0,
+    musicStep: 0,
+    stepDur: 0.155,
+    ensure() {
+      if (this.ctx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      this.ctx = new AC();
+
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 1.0;
+      this.master.connect(this.ctx.destination);
+
+      this.sfxBus = this.ctx.createGain();
+      this.sfxBus.gain.value = 1.0;
+      this.sfxBus.connect(this.master);
+
+      this.musicBus = this.ctx.createGain();
+      this.musicBus.gain.value = 0.95;
+      this.musicBus.connect(this.master);
+    },
+    setMuted(v) {
+      this.muted = !!v;
+      this.ensure();
+      if (this.master && this.ctx) {
+        const now = this.ctx.currentTime;
+        this.master.gain.cancelScheduledValues(now);
+        this.master.gain.setTargetAtTime(this.muted ? 0.0001 : 1.0, now, 0.02);
+        updateButtons();
+      }
+    },
+    resume() {
+      this.ensure();
+      if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+      if (!this.started && this.ctx) {
+        this.started = true;
+        this.musicTime = this.ctx.currentTime + 0.06;
+        this.musicStep = 0;
+      }
+    },
+    noteAt(freq, when, duration = 0.05, type = 'square', gain = 0.025, slide = 0, bus = 'sfx') {
+      this.ensure();
+      if (!this.ctx) return;
+      const dest = bus === 'music' ? (this.musicBus || this.ctx.destination) : (this.sfxBus || this.ctx.destination);
+      const osc = this.ctx.createOscillator();
+      const amp = this.ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, when);
+      if (slide) osc.frequency.linearRampToValueAtTime(freq + slide, when + duration);
+      amp.gain.setValueAtTime(0.0001, when);
+      amp.gain.exponentialRampToValueAtTime(gain, when + Math.min(0.012, duration * 0.35));
+      amp.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+      osc.connect(amp).connect(dest);
+      osc.start(when);
+      osc.stop(when + duration + 0.03);
+    },
+    beep(freq = 440, duration = 0.05, type = 'square', gain = 0.025, slide = 0) {
+      if (this.muted) return;
+      this.ensure();
+      if (!this.ctx) return;
+      this.noteAt(freq, this.ctx.currentTime, duration, type, gain, slide, 'sfx');
+    },
+    noise(duration = 0.08, gain = 0.018) {
+      if (this.muted) return;
+      this.ensure();
+      if (!this.ctx) return;
+      const len = Math.max(1, Math.floor(this.ctx.sampleRate * duration));
+      const buffer = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const src = this.ctx.createBufferSource();
+      const amp = this.ctx.createGain();
+      src.buffer = buffer;
+      amp.gain.value = gain;
+      src.connect(amp).connect(this.sfxBus || this.ctx.destination);
+      src.start();
+    },
+    scheduleMusicStep(step, when) {
+      const bass = [
+        165, null, 165, null, 147, null, 165, null,
+        165, null, 220, null, 147, null, 165, null,
+        123, null, 165, null, 147, null, 165, null,
+        165, null, 247, null, 147, null, 196, null
+      ];
+      const pulse = [
+        null, 523, null, 659, null, 587, null, 659,
+        null, 698, null, 784, null, 698, null, 659,
+        null, 523, null, 659, null, 587, null, 659,
+        null, 784, null, 880, null, 784, null, 698
+      ];
+      const bassFreq = bass[step % bass.length];
+      const pulseFreq = pulse[step % pulse.length];
+
+      if (bassFreq) {
+        this.noteAt(bassFreq, when, this.stepDur * 0.76, 'square', 0.0185, -6, 'music');
+        this.noteAt(bassFreq * 0.5, when, this.stepDur * 0.56, 'sine', 0.0105, 0, 'music');
+      }
+      if (pulseFreq) {
+        this.noteAt(pulseFreq, when + this.stepDur * 0.04, this.stepDur * 0.38, 'triangle', 0.0135, 18, 'music');
+      }
+      if (step % 4 === 0) {
+        this.noteAt(2637, when, 0.015, 'square', 0.0042, -220, 'music');
+      }
+    },
+    tickMusic() {
+      if (!this.started) return;
+      this.ensure();
+      if (!this.ctx || this.ctx.state === 'suspended') return;
+      const lookAhead = 0.30;
+      while (this.musicTime < this.ctx.currentTime + lookAhead) {
+        this.scheduleMusicStep(this.musicStep, this.musicTime);
+        this.musicTime += this.stepDur;
+        this.musicStep = (this.musicStep + 1) % 32;
+      }
+    }
+  };
+
+  function updateButtons() {
+    muteBtn.textContent = audio.muted ? 'Unmute [M]' : 'Mute [M]';
+    muteBtn.classList.toggle('active', audio.muted);
+    const pausable = gameState === 'playing' || gameState === 'paused';
+    pauseBtn.disabled = !pausable;
+    pauseBtn.textContent = gameState === 'paused' ? 'Resume [P]' : 'Pause [P]';
+    pauseBtn.classList.toggle('active', gameState === 'paused');
+  }
+
+  function updateHud() {
+    saveHighScore();
+    areaText.textContent = claimedPercent + '%';
+    livesText.textContent = lives;
+    levelText.textContent = level;
+    timeText.textContent = levelTime.toFixed(1);
+    scoreText.textContent = score;
+    highScoreText.textContent = highScore;
+    barFill.style.width = Math.min(100, claimedPercent) + '%';
+    updateButtons();
+  }
+
+  function initGrid() {
+    grid = Array.from({ length: GRID }, (_, y) =>
+      Array.from({ length: GRID }, (_, x) =>
+        (x === 0 || y === 0 || x === GRID - 1 || y === GRID - 1) ? TERR : VOID
+      )
+    );
+    terrainDirty = true;
+  }
+
+  function setPlayerSpawn() {
+    player = {
+      x: Math.floor(GRID / 2),
+      y: 0,
+      drawing: false,
+      pulse: 0
+    };
+    drawPulseCounter = 0;
+  }
+
+  function calcPercent() {
+    let count = 0;
+    for (let y = 1; y < GRID - 1; y++) {
+      for (let x = 1; x < GRID - 1; x++) {
+        if (grid[y][x] === TERR) count++;
+      }
+    }
+    const claimable = (GRID - 2) * (GRID - 2);
+    return Math.floor((count / claimable) * 100);
+  }
+
+  function isVoidCell(gx, gy) {
+    return gx >= 1 && gy >= 1 && gx < GRID - 1 && gy < GRID - 1 && grid[gy][gx] === VOID;
+  }
+
+  function isVoidAt(x, y) {
+    return isVoidCell(Math.floor(x), Math.floor(y));
+  }
+
+  function spawnEnemies() {
+    enemies = [];
+    const count = Math.min(1 + Math.floor((level - 1) / 2), 3);
+    const speed = 18 + level * 3.2;
+    for (let i = 0; i < count; i++) {
+      let placed = false;
+      for (let tries = 0; tries < 400 && !placed; tries++) {
+        const x = 8 + Math.random() * (GRID - 16);
+        const y = 8 + Math.random() * (GRID - 16);
+        if (!isVoidAt(x, y)) continue;
+        const angle = Math.random() * Math.PI * 2;
+        const vx = Math.cos(angle) * (speed / GRID);
+        const vy = Math.sin(angle) * (speed / GRID);
+        if (Math.abs(vx) < 0.06 || Math.abs(vy) < 0.06) continue;
+        enemies.push({ x, y, vx, vy, baseSpeed: speed / GRID, stuckFrames: 0 });
+        placed = true;
+      }
+    }
+  }
+
+  const DIRS = [
+    { x: 1, y: 0 },
+    { x: 0, y: 1 },
+    { x: -1, y: 0 },
+    { x: 0, y: -1 }
+  ];
+
+  function cellAt(gx, gy) {
+    if (gx < 0 || gy < 0 || gx >= GRID || gy >= GRID) return VOID;
+    return grid[gy][gx];
+  }
+
+  function isWireCell(gx, gy) {
+    if (gx < 0 || gy < 0 || gx >= GRID || gy >= GRID) return false;
+    const cell = grid[gy][gx];
+    if (cell === PATH) return true;
+    if (cell !== TERR) return false;
+    return (
+      cellAt(gx + 1, gy) === VOID ||
+      cellAt(gx - 1, gy) === VOID ||
+      cellAt(gx, gy + 1) === VOID ||
+      cellAt(gx, gy - 1) === VOID ||
+      gx === 0 || gy === 0 || gx === GRID - 1 || gy === GRID - 1
+    );
+  }
+
+  function dirIndex(dx, dy) {
+    if (dx === 1 && dy === 0) return 0;
+    if (dx === 0 && dy === 1) return 1;
+    if (dx === -1 && dy === 0) return 2;
+    return 3;
+  }
+
+  function orderedDirections(dx, dy, hand) {
+    const idx = dirIndex(dx, dy);
+    const left = DIRS[(idx + 3) % 4];
+    const right = DIRS[(idx + 1) % 4];
+    const straight = DIRS[idx];
+    const back = DIRS[(idx + 2) % 4];
+    return hand < 0 ? [left, straight, right, back] : [right, straight, left, back];
+  }
+
+  function chooseSparxStep(s, allowReverse = true) {
+    const options = orderedDirections(s.dx, s.dy, s.hand);
+    for (let i = 0; i < options.length; i++) {
+      if (!allowReverse && i === 3) continue;
+      const d = options[i];
+      const nx = s.gx + d.x;
+      const ny = s.gy + d.y;
+      if (isWireCell(nx, ny)) return { nx, ny, dx: d.x, dy: d.y };
+    }
+    return null;
+  }
+
+  function nearestWireCell(sx, sy) {
+    const ix = Math.max(0, Math.min(GRID - 1, Math.round(sx)));
+    const iy = Math.max(0, Math.min(GRID - 1, Math.round(sy)));
+    for (let r = 0; r <= GRID; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+          const x = ix + dx;
+          const y = iy + dy;
+          if (isWireCell(x, y)) return { x, y };
+        }
+      }
+    }
+    return { x: 0, y: 0 };
+  }
+
+  function makeSparx(x, y, dx, dy, hand) {
+    const s = {
+      gx: x,
+      gy: y,
+      fromX: x,
+      fromY: y,
+      toX: x,
+      toY: y,
+      progress: 1,
+      dx,
+      dy,
+      hand,
+      speed: 5.4 + level * 0.55,
+      pulse: Math.random() * Math.PI * 2
+    };
+    const next = chooseSparxStep(s);
+    if (next) {
+      s.toX = next.nx;
+      s.toY = next.ny;
+      s.dx = next.dx;
+      s.dy = next.dy;
+      s.progress = 0;
+    }
+    return s;
+  }
+
+  function spawnSparxes() {
+    sparxes = [];
+    const count = Math.min(1 + Math.floor((level - 1) / 3), 2);
+    const starts = [
+      { x: 6, y: 0, dx: 1, dy: 0, hand: 1 },
+      { x: GRID - 7, y: GRID - 1, dx: -1, dy: 0, hand: -1 }
+    ];
+    for (let i = 0; i < count; i++) {
+      const st = starts[i];
+      const pos = nearestWireCell(st.x, st.y);
+      sparxes.push(makeSparx(pos.x, pos.y, st.dx, st.dy, st.hand));
+    }
+  }
+
+  function rehomeSparxes() {
+    for (const s of sparxes) {
+      if (!isWireCell(s.gx, s.gy) || !isWireCell(s.toX, s.toY)) {
+        const pos = nearestWireCell(s.gx, s.gy);
+        const fresh = makeSparx(pos.x, pos.y, s.dx, s.dy, s.hand);
+        Object.assign(s, fresh);
+      }
+    }
+  }
+
+  function burst(x, y, count, speedMul = 1) {
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = (30 + Math.random() * 130) * speedMul;
+      const life = 0.18 + Math.random() * 0.32;
+      particles.push({
+        x, y,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp,
+        life,
+        maxLife: life,
+        size: 1 + Math.random() * 2.2
+      });
+    }
+  }
+
+
+  function addPopup(text, x, y, life = 0.9, size = 18, vy = -46) {
+    popups.push({ text, x, y, life, maxLife: life, size, vy });
+  }
+
+  function setBanner(text, sub = '', life = 0.8) {
+    bannerText = text;
+    bannerSub = sub;
+    bannerTimer = Math.max(bannerTimer, life);
+  }
+
+  function drawTerrainLayer() {
+    tctx.clearRect(0, 0, WIDTH, HEIGHT);
+    tctx.fillStyle = '#000';
+    tctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+    tctx.fillStyle = GREEN_FAINT;
+    for (let y = 0; y < GRID; y++) {
+      for (let x = 0; x < GRID; x++) {
+        if (grid[y][x] === TERR) tctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+      }
+    }
+
+    tctx.strokeStyle = GREEN_SOFT;
+    tctx.lineWidth = 1;
+    tctx.beginPath();
+    for (let y = 0; y < GRID; y++) {
+      for (let x = 0; x < GRID; x++) {
+        if (grid[y][x] !== TERR) continue;
+        const sx = x * CELL;
+        const sy = y * CELL;
+        if (y === 0 || grid[y - 1][x] !== TERR) { tctx.moveTo(sx, sy); tctx.lineTo(sx + CELL, sy); }
+        if (x === GRID - 1 || grid[y][x + 1] !== TERR) { tctx.moveTo(sx + CELL, sy); tctx.lineTo(sx + CELL, sy + CELL); }
+        if (y === GRID - 1 || grid[y + 1][x] !== TERR) { tctx.moveTo(sx, sy + CELL); tctx.lineTo(sx + CELL, sy + CELL); }
+        if (x === 0 || grid[y][x - 1] !== TERR) { tctx.moveTo(sx, sy); tctx.lineTo(sx, sy + CELL); }
+      }
+    }
+    tctx.stroke();
+    terrainDirty = false;
+  }
+
+  function clearPath() {
+    for (let y = 0; y < GRID; y++) {
+      for (let x = 0; x < GRID; x++) {
+        if (grid[y][x] === PATH) grid[y][x] = VOID;
+      }
+    }
+    currentPath = [];
+    rehomeSparxes();
+  }
+
+  function floodFromEnemies() {
+    const visited = Array.from({ length: GRID }, () => Array(GRID).fill(false));
+    const stack = [];
+    for (const e of enemies) {
+      const sx = Math.floor(e.x);
+      const sy = Math.floor(e.y);
+      if (isVoidCell(sx, sy)) stack.push({ x: sx, y: sy });
+    }
+    while (stack.length) {
+      const { x, y } = stack.pop();
+      if (x < 1 || y < 1 || x >= GRID - 1 || y >= GRID - 1) continue;
+      if (visited[y][x] || grid[y][x] !== VOID) continue;
+      visited[y][x] = true;
+      stack.push({ x: x + 1, y });
+      stack.push({ x: x - 1, y });
+      stack.push({ x, y: y + 1 });
+      stack.push({ x, y: y - 1 });
+    }
+    let captured = 0;
+    for (let y = 1; y < GRID - 1; y++) {
+      for (let x = 1; x < GRID - 1; x++) {
+        if (grid[y][x] === VOID && !visited[y][x]) {
+          grid[y][x] = TERR;
+          captured++;
+        }
+      }
+    }
+    return captured;
+  }
+
+  function claimTerritory() {
+    let pathCount = 0;
+    for (let y = 0; y < GRID; y++) {
+      for (let x = 0; x < GRID; x++) {
+        if (grid[y][x] === PATH) {
+          grid[y][x] = TERR;
+          pathCount++;
+        }
+      }
+    }
+    const captured = floodFromEnemies();
+    const gain = pathCount + captured;
+    const points = Math.max(20, gain * (5 + level * 2));
+    claimedPercent = calcPercent();
+    score += points;
+
+    const px = player.x * CELL + CELL / 2;
+    const py = player.y * CELL + CELL / 2;
+    const bigGrab = gain >= 260;
+    const hugeGrab = gain >= 520;
+
+    flash = Math.min(0.58, 0.14 + gain / 700);
+    shake = Math.min(16, 4 + gain / 90);
+    hitStop = Math.max(hitStop, Math.min(0.075, 0.018 + gain / 7000));
+    burst(px, py, 18 + Math.min(54, Math.floor(gain / 10)), 1 + Math.min(1.6, gain / 260));
+    addPopup('+' + points, px, py - 6, 0.95, Math.min(34, 18 + gain / 40), -58);
+    if (hugeGrab) addPopup('MEGA GRAB', px, py - 30, 0.9, 28, -34);
+    else if (bigGrab) addPopup('BIG GRAB', px, py - 24, 0.85, 22, -28);
+
+    audio.beep(420, 0.05, 'square', 0.03, 90);
+    audio.beep(620, 0.07, 'square', 0.026, 150);
+    audio.beep(820 + Math.min(260, gain * 0.4), 0.10, 'triangle', 0.022, 200);
+    terrainDirty = true;
+    rehomeSparxes();
+    player.drawing = false;
+    currentPath = [];
+    updateHud();
+
+    if (claimedPercent >= WIN_PERCENT) {
+      const levelBonus = 1000 + level * 250;
+      const timeBonus = levelTimeBonus(levelTime, level);
+      const bonus = levelBonus + timeBonus;
+      score += bonus;
+      flash = Math.max(flash, 0.7);
+      shake = Math.max(shake, 18);
+      hitStop = Math.max(hitStop, 0.14);
+      burst(WIDTH / 2, HEIGHT / 2, 70, 1.8);
+      setBanner('SECTOR CLEARED', 'LEVEL ' + level + '  +' + levelBonus + '  TIME +' + timeBonus, 1.05);
+      addPopup('LEVEL BONUS +' + levelBonus, WIDTH / 2, HEIGHT * 0.44, 1.0, 24, -14);
+      if (timeBonus > 0) addPopup('TIME BONUS +' + timeBonus, WIDTH / 2, HEIGHT * 0.49, 1.0, 22, -10);
+      audio.beep(520, 0.08, 'square', 0.03, 80);
+      audio.beep(760, 0.10, 'triangle', 0.028, 120);
+      audio.beep(1040, 0.14, 'triangle', 0.024, 160);
+      level++;
+      clearDelay = 0.58;
+      updateHud();
+    }
+  }
+
+  function loseLife() {
+    if (gameOver) return;
+    lives--;
+    flash = 0.42;
+    shake = 14;
+    hitStop = Math.max(hitStop, 0.10);
+    burst(player.x * CELL + CELL / 2, player.y * CELL + CELL / 2, 28, 1.35);
+    if (lives > 0) setBanner('BREACH', 'LIVES ' + lives, 0.42);
+    audio.noise(0.09, 0.02);
+    audio.beep(160, 0.14, 'sawtooth', 0.03, -60);
+    clearPath();
+    setPlayerSpawn();
+    if (lives <= 0) {
+      lastRunScore = score;
+      saveHighScore();
+      titleNotice = 'SYSTEM BREACH  ·  LAST SCORE ' + lastRunScore;
+      fullReset(true);
+      flash = 0.18;
+      return;
+    }
+    updateHud();
+  }
+
+  function chooseEscapeVelocity(e) {
+    const speed = e.baseSpeed;
+    const angles = [];
+    for (let i = 0; i < 16; i++) angles.push((Math.PI * 2 * i) / 16);
+    for (let i = angles.length - 1; i > 0; i--) {
+      const j = (Math.random() * (i + 1)) | 0;
+      [angles[i], angles[j]] = [angles[j], angles[i]];
+    }
+    for (const a of angles) {
+      const vx = Math.cos(a) * speed;
+      const vy = Math.sin(a) * speed;
+      if (Math.abs(vx) < 0.06 || Math.abs(vy) < 0.06) continue;
+      const tx = e.x + vx * 0.75 * GRID;
+      const ty = e.y + vy * 0.75 * GRID;
+      if (isVoidAt(tx, ty)) {
+        e.vx = vx;
+        e.vy = vy;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function nudgeEnemyOut(e) {
+    for (let radius = 0.25; radius <= 2.5; radius += 0.25) {
+      for (let i = 0; i < 24; i++) {
+        const a = (Math.PI * 2 * i) / 24;
+        const tx = e.x + Math.cos(a) * radius;
+        const ty = e.y + Math.sin(a) * radius;
+        if (isVoidAt(tx, ty)) {
+          e.x = tx;
+          e.y = ty;
+          chooseEscapeVelocity(e);
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function enemyTouchesPath(e) {
+    const ex = Math.floor(e.x);
+    const ey = Math.floor(e.y);
+    for (let yy = ey - 1; yy <= ey + 1; yy++) {
+      for (let xx = ex - 1; xx <= ex + 1; xx++) {
+        if (yy < 0 || xx < 0 || yy >= GRID || xx >= GRID) continue;
+        if (grid[yy][xx] === PATH) return true;
+      }
+    }
+    return false;
+  }
+
+  function enemyHitsPlayer(e) {
+    if (!player.drawing) return false;
+    const dx = e.x - player.x;
+    const dy = e.y - player.y;
+    return dx * dx + dy * dy < 1.8;
+  }
+
+  function moveEnemy(e, dt) {
+    const distance = Math.hypot(e.vx, e.vy) * dt * GRID;
+    const steps = Math.max(1, Math.ceil(distance / 0.28));
+    const step = dt / steps;
+    let blockedThisFrame = 0;
+
+    for (let i = 0; i < steps; i++) {
+      let moved = false;
+
+      let nx = e.x + e.vx * step * GRID;
+      if (isVoidAt(nx, e.y)) {
+        e.x = nx;
+        moved = true;
+      } else {
+        e.vx *= -1;
+        nx = e.x + e.vx * step * GRID;
+        if (isVoidAt(nx, e.y)) {
+          e.x = nx;
+          moved = true;
+        } else {
+          blockedThisFrame++;
+        }
+      }
+
+      let ny = e.y + e.vy * step * GRID;
+      if (isVoidAt(e.x, ny)) {
+        e.y = ny;
+        moved = true;
+      } else {
+        e.vy *= -1;
+        ny = e.y + e.vy * step * GRID;
+        if (isVoidAt(e.x, ny)) {
+          e.y = ny;
+          moved = true;
+        } else {
+          blockedThisFrame++;
+        }
+      }
+
+      if (!moved) {
+        blockedThisFrame++;
+        if (!chooseEscapeVelocity(e)) {
+          e.vx = -e.vx;
+          e.vy = -e.vy;
+        }
+      }
+
+      if (!isVoidAt(e.x, e.y)) {
+        blockedThisFrame++;
+        nudgeEnemyOut(e);
+      }
+    }
+
+    e.stuckFrames = blockedThisFrame > 2 ? e.stuckFrames + 1 : 0;
+    if (e.stuckFrames > 2) {
+      chooseEscapeVelocity(e);
+      nudgeEnemyOut(e);
+      e.stuckFrames = 0;
+    }
+
+    const speed = Math.hypot(e.vx, e.vy) || 0.0001;
+    e.vx = (e.vx / speed) * e.baseSpeed;
+    e.vy = (e.vy / speed) * e.baseSpeed;
+    if (Math.abs(e.vx) < 0.06) e.vx = Math.sign(e.vx || 1) * 0.06;
+    if (Math.abs(e.vy) < 0.06) e.vy = Math.sign(e.vy || -1) * 0.06;
+  }
+
+  function moveEnemies(dt) {
+    for (const e of enemies) {
+      moveEnemy(e, dt);
+      if (enemyTouchesPath(e) || enemyHitsPlayer(e)) {
+        loseLife();
+        break;
+      }
+    }
+  }
+
+  function sparxPos(s) {
+    return {
+      x: s.fromX + (s.toX - s.fromX) * s.progress,
+      y: s.fromY + (s.toY - s.fromY) * s.progress
+    };
+  }
+
+  function sparxHitsPlayer(s) {
+    const p = sparxPos(s);
+    const dx = p.x - player.x;
+    const dy = p.y - player.y;
+    return dx * dx + dy * dy < (player.drawing ? 1.0 : 0.72);
+  }
+
+  function sparxTouchesPath(s) {
+    if (!player.drawing) return false;
+    return cellAt(s.gx, s.gy) === PATH || cellAt(s.toX, s.toY) === PATH;
+  }
+
+  function moveSparxes(dt) {
+    if (!sparxes.length) return;
+    for (const s of sparxes) {
+      s.pulse += dt * 8;
+      if (!isWireCell(s.gx, s.gy) || !isWireCell(s.toX, s.toY)) {
+        const pos = nearestWireCell(s.gx, s.gy);
+        const fresh = makeSparx(pos.x, pos.y, s.dx, s.dy, s.hand);
+        Object.assign(s, fresh);
+      }
+
+      s.progress += dt * s.speed;
+      while (s.progress >= 1) {
+        s.gx = s.toX;
+        s.gy = s.toY;
+        s.fromX = s.gx;
+        s.fromY = s.gy;
+        s.progress -= 1;
+
+        let next = chooseSparxStep(s, false);
+        if (!next) next = chooseSparxStep(s, true);
+        if (!next) {
+          const pos = nearestWireCell(s.gx, s.gy);
+          const fresh = makeSparx(pos.x, pos.y, -s.dx, -s.dy, -s.hand);
+          Object.assign(s, fresh);
+          break;
+        }
+        s.toX = next.nx;
+        s.toY = next.ny;
+        s.dx = next.dx;
+        s.dy = next.dy;
+      }
+
+      if (sparxTouchesPath(s) || sparxHitsPlayer(s)) {
+        loseLife();
+        break;
+      }
+    }
+  }
+
+  function directionForKey(key) {
+    if (key === 'ArrowUp') return { x: 0, y: -1 };
+    if (key === 'ArrowDown') return { x: 0, y: 1 };
+    if (key === 'ArrowLeft') return { x: -1, y: 0 };
+    if (key === 'ArrowRight') return { x: 1, y: 0 };
+    return { x: 0, y: 0 };
+  }
+
+  function chooseDirection() {
+    const key = dirOrder.length ? dirOrder[dirOrder.length - 1] : null;
+    return key ? directionForKey(key) : { x: 0, y: 0 };
+  }
+
+  function currentMoveInterval() {
+    return (grid[player.y][player.x] === TERR && !player.drawing && keys.has('Shift'))
+      ? safeInterval * 0.72
+      : moveInterval;
+  }
+
+  function playerStep(dirOverride = null) {
+    const dir = dirOverride || chooseDirection();
+    if (!dir.x && !dir.y) return false;
+
+    const nx = player.x + dir.x;
+    const ny = player.y + dir.y;
+    if (nx < 0 || ny < 0 || nx >= GRID || ny >= GRID) return false;
+
+    const cell = grid[ny][nx];
+
+    if (!player.drawing && cell === TERR) {
+      player.x = nx;
+      player.y = ny;
+      player.pulse = 1;
+      if (keys.has('Shift')) {
+        score += 1;
+        updateHud();
+      }
+      return true;
+    }
+
+    if (!player.drawing && cell === VOID) {
+      player.drawing = true;
+      player.x = nx;
+      player.y = ny;
+      grid[player.y][player.x] = PATH;
+      currentPath = [{ x: player.x, y: player.y }];
+      player.pulse = 1;
+      drawPulseCounter = 0;
+      audio.beep(260, 0.025, 'square', 0.02, 10);
+      return true;
+    }
+
+    if (player.drawing) {
+      if (cell === VOID) {
+        player.x = nx;
+        player.y = ny;
+        grid[player.y][player.x] = PATH;
+        currentPath.push({ x: player.x, y: player.y });
+        player.pulse = 1;
+        drawPulseCounter++;
+        if (drawPulseCounter % 4 === 0) {
+          audio.beep(220 + ((player.x + player.y) % 6) * 15, 0.016, 'square', 0.01, 6);
+        }
+        return true;
+      } else if (cell === TERR) {
+        player.x = nx;
+        player.y = ny;
+        claimTerritory();
+        player.pulse = 1;
+        return true;
+      } else if (cell === PATH) {
+        loseLife();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function snapInputStep(key) {
+    const dir = directionForKey(key);
+    if (!dir.x && !dir.y) return;
+    if (playerStep(dir)) {
+      stepAccumulator = currentMoveInterval() * SNAP_CHAIN;
+    }
+  }
+
+  function updateParticles(dt) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.life -= dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vx *= 0.98;
+      p.vy *= 0.98;
+      if (p.life <= 0) particles.splice(i, 1);
+    }
+  }
+
+  function updatePopups(dt) {
+    for (let i = popups.length - 1; i >= 0; i--) {
+      const p = popups[i];
+      p.life -= dt;
+      p.y += p.vy * dt;
+      if (p.life <= 0) popups.splice(i, 1);
+    }
+  }
+
+  function update(dt) {
+    audio.tickMusic();
+    scanPhase += dt * 80;
+
+    if (gameState === 'title' || gameState === 'paused') {
+      flash = Math.max(0, flash - dt * 0.8);
+      shake = Math.max(0, shake - dt * 18);
+      bannerTimer = Math.max(0, bannerTimer - dt);
+      player.pulse = Math.max(0, player.pulse - dt * 3);
+      updateParticles(dt * 0.4);
+      updatePopups(dt * 0.4);
+      return;
+    }
+
+    if (hitStop > 0) {
+      hitStop -= dt;
+      const frozenDt = dt * 0.12;
+      flash = Math.max(0, flash - frozenDt * 1.1);
+      shake = Math.max(0, shake - frozenDt * 18);
+      bannerTimer = Math.max(0, bannerTimer - frozenDt);
+      player.pulse = Math.max(0, player.pulse - frozenDt * 4);
+      updateParticles(frozenDt);
+      updatePopups(frozenDt);
+      return;
+    }
+
+    if (gameOver || gameState === 'gameover') {
+      flash = Math.max(0, flash - dt * 0.8);
+      shake = Math.max(0, shake - dt * 18);
+      bannerTimer = Math.max(0, bannerTimer - dt);
+      updateParticles(dt);
+      updatePopups(dt);
+      return;
+    }
+
+    if (clearDelay > 0) {
+      clearDelay -= dt;
+      flash = Math.max(0, flash - dt * 1.2);
+      shake = Math.max(0, shake - dt * 20);
+      bannerTimer = Math.max(0, bannerTimer - dt);
+      player.pulse = Math.max(0, player.pulse - dt * 5);
+      updateParticles(dt);
+      updatePopups(dt);
+      if (clearDelay <= 0 && !gameOver && gameState === 'playing') newLevel();
+      return;
+    }
+
+    levelTime += dt;
+    const interval = currentMoveInterval();
+
+    stepAccumulator += dt;
+    while (stepAccumulator >= interval) {
+      playerStep();
+      stepAccumulator -= interval;
+      if (gameOver) break;
+    }
+
+    moveEnemies(dt);
+    if (!gameOver) moveSparxes(dt);
+
+    player.pulse = Math.max(0, player.pulse - dt * 5);
+    flash = Math.max(0, flash - dt * 1.9);
+    shake = Math.max(0, shake - dt * 30);
+    bannerTimer = Math.max(0, bannerTimer - dt);
+    updateParticles(dt);
+    updatePopups(dt);
+    updateHud();
+  }
+
+  function drawPath() {
+    if (!currentPath.length) return;
+    ctx.strokeStyle = 'rgba(0,255,102,0.14)';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    for (let i = 0; i < currentPath.length; i++) {
+      const node = currentPath[i];
+      const cx = node.x * CELL + CELL / 2;
+      const cy = node.y * CELL + CELL / 2;
+      if (i === 0) ctx.moveTo(cx, cy);
+      else ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+
+    ctx.strokeStyle = GREEN;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < currentPath.length; i++) {
+      const node = currentPath[i];
+      const cx = node.x * CELL + CELL / 2;
+      const cy = node.y * CELL + CELL / 2;
+      if (i === 0) ctx.moveTo(cx, cy);
+      else ctx.lineTo(cx, cy);
+    }
+    ctx.stroke();
+
+    const tail = currentPath[currentPath.length - 1];
+    const tx = tail.x * CELL + CELL / 2;
+    const ty = tail.y * CELL + CELL / 2;
+    ctx.beginPath();
+    ctx.moveTo(tx - 3, ty);
+    ctx.lineTo(tx + 3, ty);
+    ctx.moveTo(tx, ty - 3);
+    ctx.lineTo(tx, ty + 3);
+    ctx.stroke();
+  }
+
+  function drawEnemies() {
+    for (const e of enemies) {
+      const x = e.x * CELL;
+      const y = e.y * CELL;
+      const r = CELL * 1.5;
+      ctx.strokeStyle = 'rgba(0,255,102,0.14)';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(x, y, r * 1.08, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = GREEN;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x - r * 0.8, y);
+      ctx.lineTo(x + r * 0.8, y);
+      ctx.moveTo(x, y - r * 0.8);
+      ctx.lineTo(x, y + r * 0.8);
+      ctx.stroke();
+    }
+  }
+
+  function drawSparxes() {
+    for (const s of sparxes) {
+      const p = sparxPos(s);
+      const x = p.x * CELL + CELL / 2;
+      const y = p.y * CELL + CELL / 2;
+      const a = s.pulse;
+      const r = CELL * 1.35;
+      ctx.strokeStyle = 'rgba(0,255,102,0.12)';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(x - r, y);
+      ctx.lineTo(x + r, y);
+      ctx.moveTo(x, y - r);
+      ctx.lineTo(x, y + r);
+      ctx.stroke();
+
+      ctx.strokeStyle = GREEN;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r);
+      ctx.lineTo(x - Math.cos(a) * r, y - Math.sin(a) * r);
+      ctx.moveTo(x + Math.cos(a + Math.PI / 2) * r * 0.9, y + Math.sin(a + Math.PI / 2) * r * 0.9);
+      ctx.lineTo(x - Math.cos(a + Math.PI / 2) * r * 0.9, y - Math.sin(a + Math.PI / 2) * r * 0.9);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.rect(x - r * 0.28, y - r * 0.28, r * 0.56, r * 0.56);
+      ctx.stroke();
+    }
+  }
+
+  function drawPlayer() {
+    const px = player.x * CELL + CELL / 2;
+    const py = player.y * CELL + CELL / 2;
+    const s = CELL * (1.05 + player.pulse * 0.22);
+    ctx.strokeStyle = 'rgba(0,255,102,0.16)';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.rect(px - s * 0.52, py - s * 0.52, s * 1.04, s * 1.04);
+    ctx.stroke();
+    ctx.strokeStyle = GREEN;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.rect(px - s * 0.45, py - s * 0.45, s * 0.9, s * 0.9);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(px - s * 0.7, py);
+    ctx.lineTo(px + s * 0.7, py);
+    ctx.moveTo(px, py - s * 0.7);
+    ctx.lineTo(px, py + s * 0.7);
+    ctx.stroke();
+  }
+
+  function drawParticles() {
+    ctx.strokeStyle = GREEN;
+    ctx.lineWidth = 1.4;
+    for (const p of particles) {
+      ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+      ctx.beginPath();
+      ctx.moveTo(p.x - p.size, p.y);
+      ctx.lineTo(p.x + p.size, p.y);
+      ctx.moveTo(p.x, p.y - p.size);
+      ctx.lineTo(p.x, p.y + p.size);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+
+  function drawPopups() {
+    if (!popups.length) return;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const p of popups) {
+      const a = Math.max(0, p.life / p.maxLife);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = 'rgba(0,0,0,0.65)';
+      ctx.font = `bold ${Math.round(p.size + 4)}px Consolas, monospace`;
+      ctx.fillText(p.text, p.x + 1, p.y + 1);
+      ctx.fillStyle = GREEN;
+      ctx.font = `bold ${Math.round(p.size)}px Consolas, monospace`;
+      ctx.fillText(p.text, p.x, p.y);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawOverlay() {
+    if (flash > 0) {
+      ctx.fillStyle = `rgba(0,255,102,${flash * 0.22})`;
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    }
+
+    ctx.fillStyle = 'rgba(0,255,102,0.03)';
+    const phase = scanPhase % 6;
+    for (let y = -phase; y < HEIGHT; y += 6) ctx.fillRect(0, y, WIDTH, 1);
+
+    if (bannerTimer > 0 && !gameOver && gameState !== 'title' && gameState !== 'paused') {
+      const a = Math.min(1, bannerTimer / 0.25);
+      ctx.globalAlpha = a;
+      ctx.fillStyle = 'rgba(0,0,0,0.46)';
+      ctx.fillRect(WIDTH * 0.17, HEIGHT * 0.15, WIDTH * 0.66, HEIGHT * 0.12);
+      ctx.strokeStyle = 'rgba(0,255,102,0.75)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(WIDTH * 0.17, HEIGHT * 0.15, WIDTH * 0.66, HEIGHT * 0.12);
+      ctx.fillStyle = GREEN;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 28px Consolas, monospace';
+      ctx.fillText(bannerText, WIDTH / 2, HEIGHT * 0.195);
+      if (bannerSub) {
+        ctx.font = '16px Consolas, monospace';
+        ctx.fillText(bannerSub, WIDTH / 2, HEIGHT * 0.235);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    if (gameState === 'title') {
+      ctx.fillStyle = 'rgba(0,0,0,0.84)';
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+      const cx = WIDTH / 2;
+      const left = WIDTH * 0.16;
+      const right = WIDTH * 0.84;
+
+      ctx.strokeStyle = 'rgba(0,255,102,0.22)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(left, HEIGHT * 0.23);
+      ctx.lineTo(right, HEIGHT * 0.23);
+      ctx.moveTo(left, HEIGHT * 0.76);
+      ctx.lineTo(right, HEIGHT * 0.76);
+      ctx.stroke();
+
+      ctx.fillStyle = GREEN;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      ctx.shadowColor = 'rgba(0,255,102,0.32)';
+      ctx.shadowBlur = 10;
+      ctx.font = 'bold 56px Consolas, monospace';
+      ctx.fillText('SPLARG LAND GRAB', cx, HEIGHT * 0.17);
+      ctx.shadowBlur = 0;
+
+      ctx.font = '22px Consolas, monospace';
+      ctx.fillText('CARVE THE VOID. BOX THE SPLARGS.', cx, HEIGHT * 0.30);
+
+      ctx.font = '18px Consolas, monospace';
+      ctx.fillText('LEAVE THE SAFE EDGE TO DRAW. RETURN TO CLAIM.', cx, HEIGHT * 0.39);
+
+      ctx.font = 'bold 22px Consolas, monospace';
+      ctx.fillText('CONTROLS', cx, HEIGHT * 0.50);
+
+      ctx.font = '20px Consolas, monospace';
+      ctx.fillText('ARROWS MOVE   ·   SHIFT FAST EDGE', cx, HEIGHT * 0.58);
+      ctx.fillText('ENTER START   ·   P / ESC PAUSE', cx, HEIGHT * 0.64);
+      ctx.fillText('M MUTE   ·   R RESTART', cx, HEIGHT * 0.70);
+
+      ctx.font = '18px Consolas, monospace';
+      if (titleNotice) ctx.fillText(titleNotice, cx, HEIGHT * 0.80);
+      ctx.fillText('HIGH SCORE  ' + highScore, cx, HEIGHT * 0.85);
+
+      ctx.shadowColor = 'rgba(0,255,102,0.28)';
+      ctx.shadowBlur = 8;
+      ctx.font = 'bold 28px Consolas, monospace';
+      ctx.fillText('PRESS ENTER OR SPACE', cx, HEIGHT * 0.92);
+      ctx.shadowBlur = 0;
+      return;
+    }
+
+    if (gameState === 'paused') {
+      ctx.fillStyle = 'rgba(0,0,0,0.76)';
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+      const panelX = WIDTH * 0.19;
+      const panelY = HEIGHT * 0.31;
+      const panelW = WIDTH * 0.62;
+      const panelH = HEIGHT * 0.24;
+      ctx.strokeStyle = GREEN;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(panelX, panelY, panelW, panelH);
+      ctx.fillStyle = GREEN;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'bold 34px Consolas, monospace';
+      ctx.fillText('PAUSED', WIDTH / 2, panelY + panelH * 0.28);
+      ctx.font = '18px Consolas, monospace';
+      ctx.fillText('ENTER / SPACE / P / ESC TO RESUME', WIDTH / 2, panelY + panelH * 0.58);
+      ctx.fillText('M TO MUTE   ·   R TO RESTART', WIDTH / 2, panelY + panelH * 0.78);
+      return;
+    }
+
+    if (gameOver || gameState === 'gameover') {
+      gameState = 'title';
+      return;
+    }
+  }
+
+  function render() {
+    if (terrainDirty) drawTerrainLayer();
+
+    const sx = shake > 0 ? (Math.random() - 0.5) * shake : 0;
+    const sy = shake > 0 ? (Math.random() - 0.5) * shake : 0;
+
+    ctx.save();
+    ctx.clearRect(0, 0, WIDTH, HEIGHT);
+    ctx.translate(sx, sy);
+    ctx.drawImage(terrainCanvas, 0, 0);
+    drawPath();
+    drawEnemies();
+    drawSparxes();
+    drawPlayer();
+    drawParticles();
+    drawPopups();
+    drawOverlay();
+    ctx.restore();
+  }
+
+  function newLevel(fresh = false) {
+    initGrid();
+    setPlayerSpawn();
+    spawnEnemies();
+    spawnSparxes();
+    claimedPercent = calcPercent();
+    levelTime = 0;
+    clearDelay = 0;
+    flash = fresh ? 0.16 : 0.3;
+    shake = fresh ? 0 : 5;
+    gameState = 'playing';
+    updateHud();
+    audio.beep(280 + level * 40, 0.10, 'square', 0.028, 70);
+    if (!fresh) audio.beep(430 + level * 40, 0.12, 'triangle', 0.024, 110);
+  }
+
+  function fullReset(toTitle = false) {
+    score = 0;
+    lives = 3;
+    level = 1;
+    levelTime = 0;
+    clearDelay = 0;
+    particles.length = 0;
+    popups.length = 0;
+    sparxes.length = 0;
+    currentPath = [];
+    dirOrder = [];
+    keys.clear();
+    gameOver = false;
+    stepAccumulator = 0;
+    hitStop = 0;
+    bannerTimer = 0;
+    bannerText = '';
+    bannerSub = '';
+    initGrid();
+    setPlayerSpawn();
+    spawnEnemies();
+    spawnSparxes();
+    claimedPercent = calcPercent();
+    gameState = toTitle ? 'title' : 'playing';
+    flash = toTitle ? 0 : 0.16;
+    shake = 0;
+    updateHud();
+  }
+
+
+  function startGame() {
+    if (gameState === 'paused') {
+      gameState = 'playing';
+      return;
+    }
+    titleNotice = '';
+    fullReset(false);
+    audio.resume();
+  }
+
+  function togglePause() {
+    if (gameState === 'title' || gameState === 'gameover') return;
+    gameState = gameState === 'paused' ? 'playing' : 'paused';
+    updateButtons();
+  }
+
+  function loop(ts) {
+    if (!lastTime) lastTime = ts;
+    let dt = (ts - lastTime) / 1000;
+    lastTime = ts;
+    dt = Math.min(dt, 0.025);
+    update(dt);
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener('keydown', (e) => {
+    const lower = e.key.toLowerCase();
+
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (gameState === 'title' || gameState === 'gameover') startGame();
+      else if (gameState === 'paused') togglePause();
+      return;
+    }
+
+    if (lower === 'p' || e.key === 'Escape') {
+      e.preventDefault();
+      if (gameState === 'playing' || gameState === 'paused') togglePause();
+      return;
+    }
+
+    if (e.key.startsWith('Arrow') || e.key === 'Shift') {
+      e.preventDefault();
+      keys.add(e.key);
+      if (gameState === 'title') startGame();
+      if (gameState === 'playing') {
+        audio.resume();
+        if (e.key.startsWith('Arrow')) {
+          dirOrder = dirOrder.filter(k => k !== e.key);
+          dirOrder.push(e.key);
+          if (!e.repeat) snapInputStep(e.key);
+        }
+      }
+      return;
+    }
+    if (lower === 'm') {
+      audio.setMuted(!audio.muted);
+    }
+    if (lower === 'r') {
+      if (gameState === 'title') startGame();
+      else startGame();
+    }
+  }, { passive: false });
+
+  window.addEventListener('keyup', (e) => {
+    keys.delete(e.key);
+    if (e.key.startsWith('Arrow')) {
+      dirOrder = dirOrder.filter(k => k !== e.key);
+    }
+  });
+
+  pauseBtn.addEventListener('click', () => {
+    if (gameState === 'playing' || gameState === 'paused') {
+      audio.resume();
+      togglePause();
+    }
+  });
+
+  muteBtn.addEventListener('click', () => {
+    audio.resume();
+    audio.setMuted(!audio.muted);
+  });
+
+  fullReset(true);
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
